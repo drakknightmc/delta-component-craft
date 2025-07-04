@@ -66,18 +66,18 @@ interface PositionData {
 interface TradingContextType {
   // Connection status
   connectionStatus: 'connecting' | 'connected' | 'disconnected';
-  
+
   // Data stores - will be empty until you integrate WebSocket subscriptions
   marketData: Record<string, MarketData>;
   orderBooks: Record<string, OrderBookData>;
   trades: Record<string, TradeData[]>;
   positions: PositionData[];
-  
+
   // Subscription management
-  subscribeToTicker: (symbol: string, callback?: (data: any) => void) => () => void;
-  subscribeToOrderBook: (symbol: string, callback?: (data: any) => void) => () => void;
-  subscribeToTrades: (symbol: string, callback?: (data: any) => void) => () => void;
-  
+  subscribeToTicker: (symbol: string[], callback?: (data: any) => void) => () => void;
+  subscribeToOrderBook: (symbol: string[], callback?: (data: any) => void) => () => void;
+  subscribeToTrades: (symbol: string[], callback?: (data: any) => void) => () => void;
+
   // WebSocket service for direct access
   wsService: WebSocketService;
 }
@@ -89,16 +89,16 @@ interface TradingProviderProps {
 }
 
 export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) => {
-  const [wsService] = useState(() => new WebSocketService({ 
-    url: 'wss://production-esocket.delta.exchange:8080'
+  const [wsService] = useState(() => new WebSocketService({
+    url: 'wss://socket.delta.exchange'
   }));
-  
+
   // Data stores
   const [marketData, setMarketData] = useState<Record<string, MarketData>>({});
   const [orderBooks, setOrderBooks] = useState<Record<string, OrderBookData>>({});
   const [trades, setTrades] = useState<Record<string, TradeData[]>>({});
   const [positions, setPositions] = useState<PositionData[]>([]);
-  
+
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
 
   // Initialize WebSocket connection
@@ -131,11 +131,12 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
    *   // data.data contains: { symbol, price, open, high, low, close, volume, change, timestamp }
    * });
    */
-  const subscribeToTicker = useCallback((symbol: string, callback?: (data: any) => void) => {
+  const subscribeToTicker = useCallback((symbol: string[], callback?: (data: any) => void) => {
     const unsubscribe = wsService.subscribe('v2/ticker', symbol, (data) => {
       // TODO: Update marketData state when you integrate real data
       // Example:
-      // const tickerData = data.data;
+      console.log(`Ticker update for ${symbol}:`, data);
+      const tickerData = data.data;
       // setMarketData(prev => ({
       //   ...prev,
       //   [symbol]: {
@@ -150,10 +151,10 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
       //     timestamp: tickerData.timestamp
       //   }
       // }));
-      
+
       if (callback) callback(data);
     });
-    
+
     return unsubscribe;
   }, [wsService]);
 
@@ -166,7 +167,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
    *   // data.data contains: { symbol, buy: [{price, size}], sell: [{price, size}] }
    * });
    */
-  const subscribeToOrderBook = useCallback((symbol: string, callback?: (data: any) => void) => {
+  const subscribeToOrderBook = useCallback((symbol: string[], callback?: (data: any) => void) => {
     const unsubscribe = wsService.subscribe('l2_orderbook', symbol, (data) => {
       // TODO: Update orderBooks state when you integrate real data
       // Example:
@@ -180,10 +181,10 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
       //     timestamp: Date.now()
       //   }
       // }));
-      
+
       if (callback) callback(data);
     });
-    
+
     return unsubscribe;
   }, [wsService]);
 
@@ -196,7 +197,7 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
    *   // data.data contains: { symbol, price, size, side, timestamp }
    * });
    */
-  const subscribeToTrades = useCallback((symbol: string, callback?: (data: any) => void) => {
+  const subscribeToTrades = useCallback((symbol: string[], callback?: (data: any) => void) => {
     const unsubscribe = wsService.subscribe('l1_tradebook', symbol, (data) => {
       // TODO: Update trades state when you integrate real data
       // Example:
@@ -214,10 +215,10 @@ export const TradingProvider: React.FC<TradingProviderProps> = ({ children }) =>
       //     }
       //   ]
       // }));
-      
+
       if (callback) callback(data);
     });
-    
+
     return unsubscribe;
   }, [wsService]);
 

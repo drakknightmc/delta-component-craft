@@ -18,7 +18,7 @@ export const OrderBook: React.FC<{ symbol: string }> = ({ symbol }) => {
 
   useEffect(() => {
     // Subscribe to order book updates for this symbol
-    const unsubscribe = subscribeToOrderBook(symbol, (data) => {
+    const unsubscribe = subscribeToOrderBook([symbol], (data) => {
       console.log(`OrderBook: Update for ${symbol}:`, data);
       // Real data will automatically update the orderBooks state in TradingContext
     });
@@ -43,7 +43,7 @@ export const OrderBook: React.FC<{ symbol: string }> = ({ symbol }) => {
           <div className="text-right">Total</div>
         </div>
       </div>
-      
+
       <div className="space-y-0.5">
         {/* Asks (Sell Orders) */}
         <div className="max-h-48 overflow-y-auto">
@@ -59,17 +59,17 @@ export const OrderBook: React.FC<{ symbol: string }> = ({ symbol }) => {
             </div>
           )}
         </div>
-        
+
         {/* Spread */}
         <div className="py-2 my-2 border-t border-b border-gray-700">
           <div className="text-center text-yellow-400 text-sm font-semibold">
-            {asks.length > 0 && bids.length > 0 
+            {asks.length > 0 && bids.length > 0
               ? `Spread: $${(asks[asks.length - 1][0] - bids[0][0]).toFixed(1)}`
               : 'Spread: --'
             }
           </div>
         </div>
-        
+
         {/* Bids (Buy Orders) */}
         <div className="max-h-48 overflow-y-auto">
           {bids.length > 0 ? bids.slice(0, 15).map((bid, index) => (

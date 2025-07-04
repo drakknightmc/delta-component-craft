@@ -16,8 +16,8 @@ import { useTrading } from '../../contexts/TradingContext';
 
 // TODO: Replace with your actual symbols
 const SYMBOLS = [
-  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'ADAUSDT',
-  'DOTUSDT', 'LINKUSDT', 'AVAXUSDT', 'MATICUSDT', 'UNIUSDT'
+  'BTCUSD', 'ETHUSD', 'SOLUSD', 'BNBUSD', 'ADAUSD',
+  'DOTUSD', 'LINKUSD', 'AVAXUSD', 'MATICUSD', 'UNIUSD'
 ];
 
 export const MarketDataTable: React.FC = () => {
@@ -29,13 +29,13 @@ export const MarketDataTable: React.FC = () => {
     const unsubscribeFunctions: (() => void)[] = [];
 
     // Subscribe to ticker data for all symbols
-    SYMBOLS.forEach(symbol => {
-      const unsubscribe = subscribeToTicker(symbol, (data) => {
-        console.log(`MarketTable: Ticker update for ${symbol}:`, data);
-        // Real data will automatically update the marketData state in TradingContext
-      });
-      unsubscribeFunctions.push(unsubscribe);
+    // SYMBOLS.forEach(symbol => {
+    const unsubscribe = subscribeToTicker(SYMBOLS, (data) => {
+      console.log(`MarketTable: Ticker update for ${SYMBOLS}:`, data);
+      // Real data will automatically update the marketData state in TradingContext
     });
+    unsubscribeFunctions.push(unsubscribe);
+    // });
 
     return () => {
       unsubscribeFunctions.forEach(unsubscribe => unsubscribe());
@@ -57,11 +57,10 @@ export const MarketDataTable: React.FC = () => {
               <button
                 key={tab}
                 onClick={() => setSelectedTab(tab)}
-                className={`px-3 py-1 text-sm rounded ${
-                  selectedTab === tab
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-400 hover:text-white'
-                }`}
+                className={`px-3 py-1 text-sm rounded ${selectedTab === tab
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-white'
+                  }`}
               >
                 {tab}
               </button>
@@ -93,8 +92,8 @@ export const MarketDataTable: React.FC = () => {
             {availableSymbols.map((symbol) => {
               const data = marketData[symbol];
               return (
-                <tr 
-                  key={symbol} 
+                <tr
+                  key={symbol}
                   className="border-b border-gray-800 hover:bg-gray-800 cursor-pointer"
                   onClick={() => console.log('Selected symbol:', symbol)}
                 >
@@ -102,14 +101,12 @@ export const MarketDataTable: React.FC = () => {
                   <td className="text-right py-2 text-white">
                     {data ? `$${data.price.toFixed(2)}` : '--'}
                   </td>
-                  <td className={`text-right py-2 ${
-                    data && data.change >= 0 ? 'text-green-400' : 'text-red-400'
-                  }`}>
+                  <td className={`text-right py-2 ${data && data.change >= 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
                     {data ? `${data.change >= 0 ? '+' : ''}${data.change.toFixed(2)}` : '--'}
                   </td>
-                  <td className={`text-right py-2 ${
-                    data && data.changePercent >= 0 ? 'text-green-400' : 'text-red-400'
-                  }`}>
+                  <td className={`text-right py-2 ${data && data.changePercent >= 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
                     {data ? `${data.changePercent >= 0 ? '+' : ''}${data.changePercent.toFixed(2)}%` : '--'}
                   </td>
                   <td className="text-right py-2 text-gray-300">
@@ -133,7 +130,7 @@ export const MarketDataTable: React.FC = () => {
           No symbols match your search
         </div>
       )}
-      
+
       <div className="mt-4 p-3 bg-gray-800 rounded text-xs text-gray-400">
         <strong>Integration Status:</strong> {Object.keys(marketData).length} symbols receiving data
         <br />
