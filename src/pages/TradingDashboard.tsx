@@ -23,8 +23,12 @@ const TradingDashboard: React.FC = () => {
               <nav className="flex space-x-4">
                 <button className="px-3 py-1 bg-blue-600 rounded text-sm">Trade</button>
                 <button className="px-3 py-1 text-gray-400 hover:text-white text-sm">Chart</button>
-                <button className="px-3 py-1 text-gray-400 hover:text-white text-sm">Markets</button>
-                <button className="px-3 py-1 text-gray-400 hover:text-white text-sm">Portfolio</button>
+                <button
+                  className="px-3 py-1 text-gray-400 hover:text-white text-sm"
+                  onClick={() => window.location.href = '/markets'}
+                >
+                  Markets
+                </button> <button className="px-3 py-1 text-gray-400 hover:text-white text-sm">Portfolio</button>
               </nav>
             </div>
             <div className="flex items-center space-x-4">
