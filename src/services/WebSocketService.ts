@@ -5,26 +5,43 @@ export interface WebSocketConfig {
   maxReconnectAttempts?: number;
 }
 
-export interface MarketData {
+export interface DeltaTickerData {
   symbol: string;
-  price: number;
-  change: number;
-  volume: number;
+  price: string;
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  volume: string;
   timestamp: number;
+  change: string;
+  product_id: number;
 }
 
-export interface OrderBookData {
-  bids: Array<[number, number]>;
-  asks: Array<[number, number]>;
+export interface DeltaOrderBookData {
   symbol: string;
+  product_id: number;
+  buy: Array<{ price: string; size: string }>;
+  sell: Array<{ price: string; size: string }>;
+  last_sequence_no: number;
+  last_updated_at: number;
 }
 
-export interface PositionData {
+export interface DeltaTradeData {
   symbol: string;
-  size: number;
-  avgPrice: number;
-  unrealizedPnl: number;
-  realizedPnl: number;
+  price: string;
+  size: string;
+  side: 'buy' | 'sell';
+  timestamp: number;
+  buyer_role: string;
+  seller_role: string;
+}
+
+export interface DeltaMessage {
+  type: string;
+  table?: string;
+  action?: string;
+  data?: any[];
 }
 
 export class WebSocketService {
@@ -35,6 +52,7 @@ export class WebSocketService {
   private subscribers = new Map<string, Set<(data: any) => void>>();
   private isConnecting = false;
   private isDestroyed = false;
+  private subscribedChannels = new Set<string>();
 
   constructor(config: WebSocketConfig) {
     this.config = {
@@ -55,23 +73,26 @@ export class WebSocketService {
         this.ws = new WebSocket(this.config.url);
         
         this.ws.onopen = () => {
-          console.log('WebSocket connected');
+          console.log('WebSocket connected to Delta Exchange');
           this.isConnecting = false;
           this.reconnectAttempts = 0;
+          
+          // Re-subscribe to channels after reconnection
+          this.resubscribeChannels();
           resolve();
         };
 
         this.ws.onmessage = (event) => {
           try {
-            const data = JSON.parse(event.data);
-            this.handleMessage(data);
+            const message: DeltaMessage = JSON.parse(event.data);
+            this.handleDeltaMessage(message);
           } catch (error) {
-            console.error('Error parsing WebSocket message:', error);
+            console.error('Error parsing Delta WebSocket message:', error);
           }
         };
 
         this.ws.onclose = (event) => {
-          console.log('WebSocket closed:', event.code, event.reason);
+          console.log('Delta WebSocket closed:', event.code, event.reason);
           this.isConnecting = false;
           this.ws = null;
           
@@ -81,7 +102,7 @@ export class WebSocketService {
         };
 
         this.ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
+          console.error('Delta WebSocket error:', error);
           this.isConnecting = false;
           reject(error);
         };
@@ -92,35 +113,79 @@ export class WebSocketService {
     });
   }
 
-  private handleMessage(data: any) {
-    const { type, payload } = data;
-    const subscribers = this.subscribers.get(type);
+  private handleDeltaMessage(message: DeltaMessage) {
+    console.log('Received Delta message:', message);
     
-    if (subscribers) {
-      subscribers.forEach(callback => {
-        try {
-          callback(payload);
-        } catch (error) {
-          console.error('Error in subscriber callback:', error);
-        }
-      });
+    if (message.type === 'table' && message.table && message.data) {
+      const subscribers = this.subscribers.get(message.table);
+      
+      if (subscribers) {
+        subscribers.forEach(callback => {
+          try {
+            callback({
+              action: message.action,
+              data: message.data
+            });
+          } catch (error) {
+            console.error('Error in subscriber callback:', error);
+          }
+        });
+      }
     }
   }
 
-  subscribe(type: string, callback: (data: any) => void): () => void {
-    if (!this.subscribers.has(type)) {
-      this.subscribers.set(type, new Set());
+  private resubscribeChannels() {
+    this.subscribedChannels.forEach(channel => {
+      this.subscribeToChannel(channel);
+    });
+  }
+
+  subscribeToChannel(channel: string) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      const subscribeMessage = {
+        type: 'subscribe',
+        payload: {
+          channels: [{ name: channel }]
+        }
+      };
+      
+      this.ws.send(JSON.stringify(subscribeMessage));
+      this.subscribedChannels.add(channel);
+      console.log(`Subscribed to Delta channel: ${channel}`);
+    } else {
+      console.warn('WebSocket not connected, cannot subscribe to channel:', channel);
+    }
+  }
+
+  unsubscribeFromChannel(channel: string) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      const unsubscribeMessage = {
+        type: 'unsubscribe',
+        payload: {
+          channels: [{ name: channel }]
+        }
+      };
+      
+      this.ws.send(JSON.stringify(unsubscribeMessage));
+      this.subscribedChannels.delete(channel);
+      console.log(`Unsubscribed from Delta channel: ${channel}`);
+    }
+  }
+
+  subscribe(table: string, callback: (data: any) => void): () => void {
+    if (!this.subscribers.has(table)) {
+      this.subscribers.set(table, new Set());
     }
     
-    this.subscribers.get(type)!.add(callback);
+    this.subscribers.get(table)!.add(callback);
     
     // Return unsubscribe function
     return () => {
-      const subscribers = this.subscribers.get(type);
+      const subscribers = this.subscribers.get(table);
       if (subscribers) {
         subscribers.delete(callback);
         if (subscribers.size === 0) {
-          this.subscribers.delete(type);
+          this.subscribers.delete(table);
         }
       }
     };
@@ -145,7 +210,7 @@ export class WebSocketService {
     
     this.reconnectTimer = setTimeout(() => {
       this.reconnectAttempts++;
-      console.log(`Attempting to reconnect... (${this.reconnectAttempts})`);
+      console.log(`Attempting to reconnect to Delta... (${this.reconnectAttempts})`);
       this.connect().catch(console.error);
     }, this.config.reconnectInterval);
   }
@@ -164,6 +229,7 @@ export class WebSocketService {
     }
     
     this.subscribers.clear();
+    this.subscribedChannels.clear();
   }
 
   getConnectionState(): number {
