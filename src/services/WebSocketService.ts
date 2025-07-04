@@ -41,14 +41,14 @@ export class WebSocketService {
   private config: WebSocketConfig;
   private reconnectAttempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
-  
+
   // Map of unique subscription keys to callback sets
   // Key format: "channel:symbol" or just "channel" for global subscriptions
   private subscribers = new Map<string, Set<(data: any) => void>>();
-  
+
   // Track active subscriptions to Delta Exchange
   private activeSubscriptions = new Set<string>();
-  
+
   private isConnecting = false;
   private isDestroyed = false;
 
@@ -66,18 +66,18 @@ export class WebSocketService {
   connect(): Promise<void> {
     if (this.isDestroyed) return Promise.reject(new Error('Service destroyed'));
     if (this.isConnecting) return Promise.resolve();
-    
+
     this.isConnecting = true;
-    
+
     return new Promise((resolve, reject) => {
       try {
         this.ws = new WebSocket(this.config.url);
-        
+
         this.ws.onopen = () => {
           console.log('WebSocket connected to Delta Exchange');
           this.isConnecting = false;
           this.reconnectAttempts = 0;
-          
+
           // Re-subscribe to all active subscriptions after reconnection
           this.resubscribeAll();
           resolve();
@@ -96,7 +96,7 @@ export class WebSocketService {
           console.log('WebSocket closed:', event.code, event.reason);
           this.isConnecting = false;
           this.ws = null;
-          
+
           if (!this.isDestroyed && this.shouldReconnect()) {
             this.scheduleReconnect();
           }
@@ -122,26 +122,26 @@ export class WebSocketService {
    * @param callback - Function to call when data is received
    * @returns Unsubscribe function
    */
-  subscribe(channel: string, symbol: string | null, callback: (data: any) => void): () => void {
+  subscribe(channel: string, symbol: string[] | null, callback: (data: any) => void): () => void {
     const subscriptionKey = this.createSubscriptionKey(channel, symbol);
-    
+
     if (!this.subscribers.has(subscriptionKey)) {
       this.subscribers.set(subscriptionKey, new Set());
-      
+
       // Send subscription to Delta Exchange if this is the first subscriber for this channel+symbol
       this.sendSubscription(channel, symbol);
     }
-    
+
     this.subscribers.get(subscriptionKey)!.add(callback);
-    
+
     console.log(`Subscribed to ${subscriptionKey}`);
-    
+
     // Return unsubscribe function
     return () => {
       const subscribers = this.subscribers.get(subscriptionKey);
       if (subscribers) {
         subscribers.delete(callback);
-        
+
         // If no more subscribers for this channel+symbol, unsubscribe from Delta
         if (subscribers.size === 0) {
           this.subscribers.delete(subscriptionKey);
@@ -159,11 +159,11 @@ export class WebSocketService {
     if (message.type === 'table' && message.table && message.data) {
       // Delta sends data in table format
       const channel = message.table;
-      
+
       message.data.forEach((item: any) => {
         const symbol = item.symbol || null;
         const subscriptionKey = this.createSubscriptionKey(channel, symbol);
-        
+
         const subscribers = this.subscribers.get(subscriptionKey);
         if (subscribers) {
           subscribers.forEach(callback => {
@@ -186,22 +186,22 @@ export class WebSocketService {
   /**
    * Send subscription message to Delta Exchange
    */
-  private sendSubscription(channel: string, symbol: string | null) {
+  private sendSubscription(channel: string, symbol: string[] | null) {
     if (this.ws?.readyState === WebSocket.OPEN) {
       const subscribeMessage = {
         type: 'subscribe',
         payload: {
-          channels: [{ 
-            name: symbol ? `${channel}:${symbol}` : channel 
+          channels: [{
+            name: symbol ? `${channel}:${symbol}` : channel
           }]
         }
       };
-      
+
       this.ws.send(JSON.stringify(subscribeMessage));
-      
+
       const subscriptionKey = this.createSubscriptionKey(channel, symbol);
       this.activeSubscriptions.add(subscriptionKey);
-      
+
       console.log(`Sent subscription: ${subscriptionKey}`);
     }
   }
@@ -209,22 +209,22 @@ export class WebSocketService {
   /**
    * Send unsubscription message to Delta Exchange
    */
-  private sendUnsubscription(channel: string, symbol: string | null) {
+  private sendUnsubscription(channel: string, symbol: string[] | null) {
     if (this.ws?.readyState === WebSocket.OPEN) {
       const unsubscribeMessage = {
         type: 'unsubscribe',
         payload: {
-          channels: [{ 
-            name: symbol ? `${channel}:${symbol}` : channel 
+          channels: [{
+            name: symbol ? `${channel}:${symbol}` : channel
           }]
         }
       };
-      
+
       this.ws.send(JSON.stringify(unsubscribeMessage));
-      
+
       const subscriptionKey = this.createSubscriptionKey(channel, symbol);
       this.activeSubscriptions.delete(subscriptionKey);
-      
+
       console.log(`Sent unsubscription: ${subscriptionKey}`);
     }
   }
@@ -232,8 +232,8 @@ export class WebSocketService {
   /**
    * Create a unique subscription key for channel + symbol combination
    */
-  private createSubscriptionKey(channel: string, symbol: string | null): string {
-    return symbol ? `${channel}:${symbol}` : channel;
+  private createSubscriptionKey(channel: string, symbol: string[] | null): string {
+    return symbol ? `${channel}:${symbol.join('+')}` : channel;
   }
 
   /**
@@ -241,11 +241,13 @@ export class WebSocketService {
    */
   private resubscribeAll() {
     this.activeSubscriptions.forEach(subscriptionKey => {
-      const [channel, symbol] = subscriptionKey.includes(':') 
-        ? subscriptionKey.split(':') 
+      const [channel, symbol] = subscriptionKey.includes(':')
+        ? subscriptionKey.split(':')
         : [subscriptionKey, null];
-      
-      this.sendSubscription(channel, symbol);
+
+      // Convert symbol to string[] or null
+      const symbolArr = symbol ? symbol.split('+') : null;
+      this.sendSubscription(channel, symbolArr);
     });
   }
 
@@ -257,7 +259,7 @@ export class WebSocketService {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
     }
-    
+
     this.reconnectTimer = setTimeout(() => {
       this.reconnectAttempts++;
       console.log(`Attempting to reconnect... (${this.reconnectAttempts})`);
@@ -288,17 +290,17 @@ export class WebSocketService {
    */
   disconnect() {
     this.isDestroyed = true;
-    
+
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    
+
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
-    
+
     this.subscribers.clear();
     this.activeSubscriptions.clear();
   }
