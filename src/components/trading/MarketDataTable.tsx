@@ -1,63 +1,50 @@
 
+/**
+ * Market Data Table Component
+ * 
+ * INTEGRATION GUIDE:
+ * 1. Add your list of symbols to subscribe to ticker data
+ * 2. Real market data will populate the table automatically
+ * 3. Data updates in real-time via WebSocket subscriptions
+ * 4. Add symbols to the SYMBOLS array below to start receiving data
+ */
+
 import React, { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useTrading } from '../../contexts/TradingContext';
 
-interface MarketSymbol {
-  symbol: string;
-  price: number;
-  change: number;
-  changePercent: number;
-  volume: number;
-  high24h: number;
-  low24h: number;
-}
+// TODO: Replace with your actual symbols
+const SYMBOLS = [
+  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'ADAUSDT',
+  'DOTUSDT', 'LINKUSDT', 'AVAXUSDT', 'MATICUSDT', 'UNIUSDT'
+];
 
 export const MarketDataTable: React.FC = () => {
-  const { subscribeToSymbol } = useTrading();
-  const [symbols, setSymbols] = useState<MarketSymbol[]>([]);
+  const { subscribeToTicker, marketData } = useTrading();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTab, setSelectedTab] = useState('All');
 
   useEffect(() => {
-    // Generate mock market data
-    const generateMockData = () => {
-      const mockSymbols = [
-        'BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'BNB-USDT', 'ADA-USDT',
-        'DOT-USDT', 'LINK-USDT', 'AVAX-USDT', 'MATIC-USDT', 'UNI-USDT'
-      ];
+    const unsubscribeFunctions: (() => void)[] = [];
 
-      const data = mockSymbols.map(symbol => {
-        const basePrice = Math.random() * 10000 + 1000;
-        const change = (Math.random() - 0.5) * 1000;
-        const changePercent = (change / basePrice) * 100;
-        
-        return {
-          symbol,
-          price: basePrice,
-          change,
-          changePercent,
-          volume: Math.random() * 10000000,
-          high24h: basePrice + Math.random() * 500,
-          low24h: basePrice - Math.random() * 500
-        };
+    // Subscribe to ticker data for all symbols
+    SYMBOLS.forEach(symbol => {
+      const unsubscribe = subscribeToTicker(symbol, (data) => {
+        console.log(`MarketTable: Ticker update for ${symbol}:`, data);
+        // Real data will automatically update the marketData state in TradingContext
       });
+      unsubscribeFunctions.push(unsubscribe);
+    });
 
-      setSymbols(data);
-      
-      // Subscribe to all symbols
-      data.forEach(s => subscribeToSymbol(s.symbol));
+    return () => {
+      unsubscribeFunctions.forEach(unsubscribe => unsubscribe());
     };
+  }, [subscribeToTicker]);
 
-    generateMockData();
-    const interval = setInterval(generateMockData, 3000);
-    
-    return () => clearInterval(interval);
-  }, [subscribeToSymbol]);
-
-  const filteredSymbols = symbols.filter(symbol =>
-    symbol.symbol.toLowerCase().includes(searchTerm.toLowerCase())
+  // Filter symbols based on search term and available data
+  const availableSymbols = SYMBOLS.filter(symbol =>
+    symbol.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -103,29 +90,54 @@ export const MarketDataTable: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredSymbols.map((symbol, index) => (
-              <tr 
-                key={index} 
-                className="border-b border-gray-800 hover:bg-gray-800 cursor-pointer"
-                onClick={() => console.log('Selected symbol:', symbol.symbol)}
-              >
-                <td className="py-2 text-white font-semibold">{symbol.symbol}</td>
-                <td className="text-right py-2 text-white">${symbol.price.toFixed(2)}</td>
-                <td className={`text-right py-2 ${symbol.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {symbol.change >= 0 ? '+' : ''}{symbol.change.toFixed(2)}
-                </td>
-                <td className={`text-right py-2 ${symbol.changePercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {symbol.changePercent >= 0 ? '+' : ''}{symbol.changePercent.toFixed(2)}%
-                </td>
-                <td className="text-right py-2 text-gray-300">
-                  {(symbol.volume / 1000000).toFixed(2)}M
-                </td>
-                <td className="text-right py-2 text-white">${symbol.high24h.toFixed(2)}</td>
-                <td className="text-right py-2 text-white">${symbol.low24h.toFixed(2)}</td>
-              </tr>
-            ))}
+            {availableSymbols.map((symbol) => {
+              const data = marketData[symbol];
+              return (
+                <tr 
+                  key={symbol} 
+                  className="border-b border-gray-800 hover:bg-gray-800 cursor-pointer"
+                  onClick={() => console.log('Selected symbol:', symbol)}
+                >
+                  <td className="py-2 text-white font-semibold">{symbol}</td>
+                  <td className="text-right py-2 text-white">
+                    {data ? `$${data.price.toFixed(2)}` : '--'}
+                  </td>
+                  <td className={`text-right py-2 ${
+                    data && data.change >= 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {data ? `${data.change >= 0 ? '+' : ''}${data.change.toFixed(2)}` : '--'}
+                  </td>
+                  <td className={`text-right py-2 ${
+                    data && data.changePercent >= 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {data ? `${data.changePercent >= 0 ? '+' : ''}${data.changePercent.toFixed(2)}%` : '--'}
+                  </td>
+                  <td className="text-right py-2 text-gray-300">
+                    {data ? `${(data.volume / 1000000).toFixed(2)}M` : '--'}
+                  </td>
+                  <td className="text-right py-2 text-white">
+                    {data ? `$${data.high24h.toFixed(2)}` : '--'}
+                  </td>
+                  <td className="text-right py-2 text-white">
+                    {data ? `$${data.low24h.toFixed(2)}` : '--'}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+      </div>
+
+      {availableSymbols.length === 0 && (
+        <div className="text-center py-8 text-gray-400">
+          No symbols match your search
+        </div>
+      )}
+      
+      <div className="mt-4 p-3 bg-gray-800 rounded text-xs text-gray-400">
+        <strong>Integration Status:</strong> {Object.keys(marketData).length} symbols receiving data
+        <br />
+        <strong>Next Step:</strong> Update SYMBOLS array and integrate WebSocket data parsing
       </div>
     </Card>
   );

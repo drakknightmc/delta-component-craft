@@ -1,4 +1,14 @@
 
+/**
+ * Order Panel Component
+ * 
+ * INTEGRATION GUIDE:
+ * 1. This is a UI-only component for order placement
+ * 2. Order execution requires authenticated WebSocket connection
+ * 3. Implement authentication and order placement API integration
+ * 4. Connect to Delta Exchange order placement endpoints
+ */
+
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +17,7 @@ import { useTrading } from '../../contexts/TradingContext';
 import { toast } from 'sonner';
 
 export const OrderPanel: React.FC<{ symbol: string }> = ({ symbol }) => {
-  const { placeOrder, marketData } = useTrading();
+  const { marketData } = useTrading();
   const [orderType, setOrderType] = useState<'market' | 'limit'>('limit');
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [quantity, setQuantity] = useState('');
@@ -19,6 +29,7 @@ export const OrderPanel: React.FC<{ symbol: string }> = ({ symbol }) => {
       return;
     }
 
+    // TODO: Implement real order placement
     const order = {
       symbol,
       side,
@@ -27,8 +38,8 @@ export const OrderPanel: React.FC<{ symbol: string }> = ({ symbol }) => {
       ...(orderType === 'limit' && { price: parseFloat(price) })
     };
 
-    placeOrder(order);
-    toast.success(`${side.toUpperCase()} order placed for ${quantity} ${symbol}`);
+    console.log('Order to place:', order);
+    toast.info(`Order simulation: ${side.toUpperCase()} ${quantity} ${symbol}`);
     
     // Reset form
     setQuantity('');
@@ -98,7 +109,7 @@ export const OrderPanel: React.FC<{ symbol: string }> = ({ symbol }) => {
             <Input
               value={price}
               onChange={(e) => setPrice(e.target.value)}
-              placeholder={currentPrice.toFixed(2)}
+              placeholder={currentPrice ? currentPrice.toFixed(2) : '0.00'}
               className="bg-gray-800 border-gray-600"
               type="number"
               step="0.1"
@@ -116,7 +127,7 @@ export const OrderPanel: React.FC<{ symbol: string }> = ({ symbol }) => {
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">Available Margin:</span>
-            <span className="text-green-400">$103.01</span>
+            <span className="text-gray-500">-- (requires auth)</span>
           </div>
         </div>
 
@@ -131,6 +142,10 @@ export const OrderPanel: React.FC<{ symbol: string }> = ({ symbol }) => {
         >
           {side === 'buy' ? 'Buy' : 'Sell'} {symbol}
         </Button>
+
+        <div className="p-2 bg-yellow-900/20 border border-yellow-600/30 rounded text-xs text-yellow-400">
+          <strong>Demo Mode:</strong> Order placement requires authentication integration
+        </div>
       </div>
     </Card>
   );

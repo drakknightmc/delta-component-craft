@@ -1,40 +1,27 @@
 
+/**
+ * Delta Exchange WebSocket Service
+ * 
+ * This service provides fine-grained control over WebSocket subscriptions.
+ * Each subscription is identified by a unique combination of channel + symbol,
+ * allowing independent listening to different symbols on the same channel.
+ * 
+ * Usage Examples:
+ * 1. Subscribe to ticker for specific symbols:
+ *    wsService.subscribe('v2/ticker', 'BTCUSDT', (data) => console.log(data));
+ *    wsService.subscribe('v2/ticker', 'ETHUSDT', (data) => console.log(data));
+ * 
+ * 2. Subscribe to orderbook for a symbol:
+ *    wsService.subscribe('l2_orderbook', 'BTCUSDT', (data) => console.log(data));
+ * 
+ * 3. Subscribe to trades for a symbol:
+ *    wsService.subscribe('l1_tradebook', 'BTCUSDT', (data) => console.log(data));
+ */
+
 export interface WebSocketConfig {
   url: string;
   reconnectInterval?: number;
   maxReconnectAttempts?: number;
-}
-
-export interface DeltaTickerData {
-  symbol: string;
-  price: string;
-  open: string;
-  high: string;
-  low: string;
-  close: string;
-  volume: string;
-  timestamp: number;
-  change: string;
-  product_id: number;
-}
-
-export interface DeltaOrderBookData {
-  symbol: string;
-  product_id: number;
-  buy: Array<{ price: string; size: string }>;
-  sell: Array<{ price: string; size: string }>;
-  last_sequence_no: number;
-  last_updated_at: number;
-}
-
-export interface DeltaTradeData {
-  symbol: string;
-  price: string;
-  size: string;
-  side: 'buy' | 'sell';
-  timestamp: number;
-  buyer_role: string;
-  seller_role: string;
 }
 
 export interface DeltaMessage {
@@ -44,15 +31,26 @@ export interface DeltaMessage {
   data?: any[];
 }
 
+export interface SubscriptionKey {
+  channel: string;
+  symbol?: string;
+}
+
 export class WebSocketService {
   private ws: WebSocket | null = null;
   private config: WebSocketConfig;
   private reconnectAttempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  
+  // Map of unique subscription keys to callback sets
+  // Key format: "channel:symbol" or just "channel" for global subscriptions
   private subscribers = new Map<string, Set<(data: any) => void>>();
+  
+  // Track active subscriptions to Delta Exchange
+  private activeSubscriptions = new Set<string>();
+  
   private isConnecting = false;
   private isDestroyed = false;
-  private subscribedChannels = new Set<string>();
 
   constructor(config: WebSocketConfig) {
     this.config = {
@@ -62,6 +60,9 @@ export class WebSocketService {
     };
   }
 
+  /**
+   * Connect to Delta Exchange WebSocket
+   */
   connect(): Promise<void> {
     if (this.isDestroyed) return Promise.reject(new Error('Service destroyed'));
     if (this.isConnecting) return Promise.resolve();
@@ -77,22 +78,22 @@ export class WebSocketService {
           this.isConnecting = false;
           this.reconnectAttempts = 0;
           
-          // Re-subscribe to channels after reconnection
-          this.resubscribeChannels();
+          // Re-subscribe to all active subscriptions after reconnection
+          this.resubscribeAll();
           resolve();
         };
 
         this.ws.onmessage = (event) => {
           try {
             const message: DeltaMessage = JSON.parse(event.data);
-            this.handleDeltaMessage(message);
+            this.handleMessage(message);
           } catch (error) {
-            console.error('Error parsing Delta WebSocket message:', error);
+            console.error('Error parsing WebSocket message:', error);
           }
         };
 
         this.ws.onclose = (event) => {
-          console.log('Delta WebSocket closed:', event.code, event.reason);
+          console.log('WebSocket closed:', event.code, event.reason);
           this.isConnecting = false;
           this.ws = null;
           
@@ -102,7 +103,7 @@ export class WebSocketService {
         };
 
         this.ws.onerror = (error) => {
-          console.error('Delta WebSocket error:', error);
+          console.error('WebSocket error:', error);
           this.isConnecting = false;
           reject(error);
         };
@@ -113,90 +114,139 @@ export class WebSocketService {
     });
   }
 
-  private handleDeltaMessage(message: DeltaMessage) {
-    console.log('Received Delta message:', message);
+  /**
+   * Subscribe to a specific channel + symbol combination
+   * 
+   * @param channel - Delta Exchange channel (e.g., 'v2/ticker', 'l2_orderbook', 'l1_tradebook')
+   * @param symbol - Trading symbol (e.g., 'BTCUSDT') - optional for global channels
+   * @param callback - Function to call when data is received
+   * @returns Unsubscribe function
+   */
+  subscribe(channel: string, symbol: string | null, callback: (data: any) => void): () => void {
+    const subscriptionKey = this.createSubscriptionKey(channel, symbol);
     
-    if (message.type === 'table' && message.table && message.data) {
-      const subscribers = this.subscribers.get(message.table);
+    if (!this.subscribers.has(subscriptionKey)) {
+      this.subscribers.set(subscriptionKey, new Set());
       
-      if (subscribers) {
-        subscribers.forEach(callback => {
-          try {
-            callback({
-              action: message.action,
-              data: message.data
-            });
-          } catch (error) {
-            console.error('Error in subscriber callback:', error);
-          }
-        });
-      }
-    }
-  }
-
-  private resubscribeChannels() {
-    this.subscribedChannels.forEach(channel => {
-      this.subscribeToChannel(channel);
-    });
-  }
-
-  subscribeToChannel(channel: string) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      const subscribeMessage = {
-        type: 'subscribe',
-        payload: {
-          channels: [{ name: channel }]
-        }
-      };
-      
-      this.ws.send(JSON.stringify(subscribeMessage));
-      this.subscribedChannels.add(channel);
-      console.log(`Subscribed to Delta channel: ${channel}`);
-    } else {
-      console.warn('WebSocket not connected, cannot subscribe to channel:', channel);
-    }
-  }
-
-  unsubscribeFromChannel(channel: string) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      const unsubscribeMessage = {
-        type: 'unsubscribe',
-        payload: {
-          channels: [{ name: channel }]
-        }
-      };
-      
-      this.ws.send(JSON.stringify(unsubscribeMessage));
-      this.subscribedChannels.delete(channel);
-      console.log(`Unsubscribed from Delta channel: ${channel}`);
-    }
-  }
-
-  subscribe(table: string, callback: (data: any) => void): () => void {
-    if (!this.subscribers.has(table)) {
-      this.subscribers.set(table, new Set());
+      // Send subscription to Delta Exchange if this is the first subscriber for this channel+symbol
+      this.sendSubscription(channel, symbol);
     }
     
-    this.subscribers.get(table)!.add(callback);
+    this.subscribers.get(subscriptionKey)!.add(callback);
+    
+    console.log(`Subscribed to ${subscriptionKey}`);
     
     // Return unsubscribe function
     return () => {
-      const subscribers = this.subscribers.get(table);
+      const subscribers = this.subscribers.get(subscriptionKey);
       if (subscribers) {
         subscribers.delete(callback);
+        
+        // If no more subscribers for this channel+symbol, unsubscribe from Delta
         if (subscribers.size === 0) {
-          this.subscribers.delete(table);
+          this.subscribers.delete(subscriptionKey);
+          this.sendUnsubscription(channel, symbol);
+          console.log(`Unsubscribed from ${subscriptionKey}`);
         }
       }
     };
   }
 
-  send(data: any) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(data));
-    } else {
-      console.warn('WebSocket not connected, cannot send data');
+  /**
+   * Handle incoming messages from Delta Exchange
+   */
+  private handleMessage(message: DeltaMessage) {
+    if (message.type === 'table' && message.table && message.data) {
+      // Delta sends data in table format
+      const channel = message.table;
+      
+      message.data.forEach((item: any) => {
+        const symbol = item.symbol || null;
+        const subscriptionKey = this.createSubscriptionKey(channel, symbol);
+        
+        const subscribers = this.subscribers.get(subscriptionKey);
+        if (subscribers) {
+          subscribers.forEach(callback => {
+            try {
+              callback({
+                channel,
+                symbol,
+                action: message.action,
+                data: item
+              });
+            } catch (error) {
+              console.error('Error in subscriber callback:', error);
+            }
+          });
+        }
+      });
     }
+  }
+
+  /**
+   * Send subscription message to Delta Exchange
+   */
+  private sendSubscription(channel: string, symbol: string | null) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      const subscribeMessage = {
+        type: 'subscribe',
+        payload: {
+          channels: [{ 
+            name: symbol ? `${channel}:${symbol}` : channel 
+          }]
+        }
+      };
+      
+      this.ws.send(JSON.stringify(subscribeMessage));
+      
+      const subscriptionKey = this.createSubscriptionKey(channel, symbol);
+      this.activeSubscriptions.add(subscriptionKey);
+      
+      console.log(`Sent subscription: ${subscriptionKey}`);
+    }
+  }
+
+  /**
+   * Send unsubscription message to Delta Exchange
+   */
+  private sendUnsubscription(channel: string, symbol: string | null) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      const unsubscribeMessage = {
+        type: 'unsubscribe',
+        payload: {
+          channels: [{ 
+            name: symbol ? `${channel}:${symbol}` : channel 
+          }]
+        }
+      };
+      
+      this.ws.send(JSON.stringify(unsubscribeMessage));
+      
+      const subscriptionKey = this.createSubscriptionKey(channel, symbol);
+      this.activeSubscriptions.delete(subscriptionKey);
+      
+      console.log(`Sent unsubscription: ${subscriptionKey}`);
+    }
+  }
+
+  /**
+   * Create a unique subscription key for channel + symbol combination
+   */
+  private createSubscriptionKey(channel: string, symbol: string | null): string {
+    return symbol ? `${channel}:${symbol}` : channel;
+  }
+
+  /**
+   * Re-subscribe to all active subscriptions (used after reconnection)
+   */
+  private resubscribeAll() {
+    this.activeSubscriptions.forEach(subscriptionKey => {
+      const [channel, symbol] = subscriptionKey.includes(':') 
+        ? subscriptionKey.split(':') 
+        : [subscriptionKey, null];
+      
+      this.sendSubscription(channel, symbol);
+    });
   }
 
   private shouldReconnect(): boolean {
@@ -210,11 +260,32 @@ export class WebSocketService {
     
     this.reconnectTimer = setTimeout(() => {
       this.reconnectAttempts++;
-      console.log(`Attempting to reconnect to Delta... (${this.reconnectAttempts})`);
+      console.log(`Attempting to reconnect... (${this.reconnectAttempts})`);
       this.connect().catch(console.error);
     }, this.config.reconnectInterval);
   }
 
+  /**
+   * Send raw message to Delta Exchange
+   */
+  send(data: any) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(data));
+    } else {
+      console.warn('WebSocket not connected, cannot send data');
+    }
+  }
+
+  /**
+   * Get current connection state
+   */
+  getConnectionState(): number {
+    return this.ws?.readyState ?? WebSocket.CLOSED;
+  }
+
+  /**
+   * Disconnect and cleanup
+   */
   disconnect() {
     this.isDestroyed = true;
     
@@ -229,10 +300,6 @@ export class WebSocketService {
     }
     
     this.subscribers.clear();
-    this.subscribedChannels.clear();
-  }
-
-  getConnectionState(): number {
-    return this.ws?.readyState ?? WebSocket.CLOSED;
+    this.activeSubscriptions.clear();
   }
 }

@@ -1,57 +1,32 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+/**
+ * Trading Chart Component
+ * 
+ * INTEGRATION GUIDE:
+ * 1. This component subscribes to ticker data for the given symbol
+ * 2. Replace the placeholder content with your preferred charting library
+ * 3. Popular options: TradingView Charting Library, Chart.js, D3.js
+ * 4. The subscription provides real-time price updates for live chart updates
+ */
+
+import React, { useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { useTrading } from '../../contexts/TradingContext';
 
-interface CandlestickData {
-  time: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
 export const TradingChart: React.FC<{ symbol: string }> = ({ symbol }) => {
-  const { subscribeToSymbol, marketData } = useTrading();
-  const [chartData, setChartData] = useState<CandlestickData[]>([]);
-  const [timeframe, setTimeframe] = useState('1m');
+  const { subscribeToTicker, marketData } = useTrading();
 
   useEffect(() => {
-    subscribeToSymbol(symbol);
-  }, [symbol, subscribeToSymbol]);
+    // Subscribe to ticker updates for this symbol
+    const unsubscribe = subscribeToTicker(symbol, (data) => {
+      console.log(`Chart: Ticker update for ${symbol}:`, data);
+      // TODO: Update your chart with the new ticker data
+    });
 
-  // Mock chart data for demonstration
-  useEffect(() => {
-    const generateMockData = () => {
-      const data: CandlestickData[] = [];
-      let price = 65000;
-      const now = Date.now();
-      
-      for (let i = 100; i >= 0; i--) {
-        const change = (Math.random() - 0.5) * 1000;
-        const open = price;
-        const close = price + change;
-        const high = Math.max(open, close) + Math.random() * 200;
-        const low = Math.min(open, close) - Math.random() * 200;
-        
-        data.push({
-          time: now - i * 60000,
-          open,
-          high,
-          low,
-          close,
-          volume: Math.random() * 1000000
-        });
-        
-        price = close;
-      }
-      
-      setChartData(data);
-    };
+    return unsubscribe;
+  }, [symbol, subscribeToTicker]);
 
-    generateMockData();
-  }, []);
+  const currentData = marketData[symbol];
 
   return (
     <Card className="p-4 bg-gray-900 border-gray-800">
@@ -62,12 +37,7 @@ export const TradingChart: React.FC<{ symbol: string }> = ({ symbol }) => {
             {['1m', '5m', '15m', '1h', '4h', '1d'].map((tf) => (
               <button
                 key={tf}
-                onClick={() => setTimeframe(tf)}
-                className={`px-2 py-1 text-xs rounded ${
-                  timeframe === tf
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
+                className="px-2 py-1 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600"
               >
                 {tf}
               </button>
@@ -76,23 +46,32 @@ export const TradingChart: React.FC<{ symbol: string }> = ({ symbol }) => {
         </div>
         <div className="text-right">
           <div className="text-lg font-bold text-white">
-            ${marketData[symbol]?.price?.toFixed(2) || '0.00'}
+            ${currentData?.price?.toFixed(2) || '--'}
           </div>
           <div className={`text-sm ${
-            (marketData[symbol]?.change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+            (currentData?.change || 0) >= 0 ? 'text-green-400' : 'text-red-400'
           }`}>
-            {marketData[symbol]?.change?.toFixed(2) || '0.00'}%
+            {currentData?.changePercent?.toFixed(2) || '--'}%
           </div>
         </div>
       </div>
       
-      <div className="h-96 bg-black rounded flex items-center justify-center">
-        <div className="text-gray-400">
-          <div className="text-center">
-            <div className="text-6xl mb-2">📈</div>
-            <div>Chart Component</div>
-            <div className="text-sm">Connect to TradingView or Chart.js</div>
+      <div className="h-96 bg-black rounded flex items-center justify-center border border-gray-700">
+        <div className="text-gray-400 text-center">
+          <div className="text-6xl mb-4">📈</div>
+          <div className="text-xl mb-2">Chart Placeholder</div>
+          <div className="text-sm text-gray-500 max-w-md">
+            Integrate your preferred charting library here (TradingView, Chart.js, etc.)
+            <br />
+            Real-time data available via subscribeToTicker callback
           </div>
+          {currentData && (
+            <div className="mt-4 p-3 bg-gray-800 rounded text-left text-xs">
+              <div>Symbol: {currentData.symbol}</div>
+              <div>Price: ${currentData.price}</div>
+              <div>Volume: {currentData.volume}</div>
+            </div>
+          )}
         </div>
       </div>
     </Card>

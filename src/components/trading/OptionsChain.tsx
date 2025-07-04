@@ -1,67 +1,29 @@
 
-import React, { useEffect, useState } from 'react';
+/**
+ * Options Chain Component
+ * 
+ * INTEGRATION GUIDE:
+ * 1. This component shows options data for the given symbol
+ * 2. Delta Exchange may have specific options channels - check their documentation
+ * 3. Options data typically comes from separate WebSocket channels
+ * 4. Update the subscription method once you identify the correct channel
+ */
+
+import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { useTrading } from '../../contexts/TradingContext';
 
-interface OptionData {
-  strike: number;
-  callBid: number;
-  callAsk: number;
-  callLast: number;
-  callChange: number;
-  callVolume: number;
-  putBid: number;
-  putAsk: number;
-  putLast: number;
-  putChange: number;
-  putVolume: number;
-  expiry: string;
-}
-
 export const OptionsChain: React.FC<{ symbol: string }> = ({ symbol }) => {
-  const { subscribeToSymbol } = useTrading();
-  const [optionsData, setOptionsData] = useState<OptionData[]>([]);
+  const { wsService } = useTrading();
   const [selectedExpiry, setSelectedExpiry] = useState('28 Jun 25');
 
-  useEffect(() => {
-    subscribeToSymbol(symbol);
-  }, [symbol, subscribeToSymbol]);
-
-  // Generate mock options data
-  useEffect(() => {
-    const generateMockOptions = () => {
-      const basePrice = 65000;
-      const strikes = [];
-      
-      for (let i = -10; i <= 10; i++) {
-        const strike = basePrice + (i * 1000);
-        strikes.push({
-          strike,
-          callBid: Math.max(0, basePrice - strike + Math.random() * 200 - 100),
-          callAsk: Math.max(0, basePrice - strike + Math.random() * 200 - 50),
-          callLast: Math.max(0, basePrice - strike + Math.random() * 200 - 75),
-          callChange: (Math.random() - 0.5) * 20,
-          callVolume: Math.floor(Math.random() * 1000),
-          putBid: Math.max(0, strike - basePrice + Math.random() * 200 - 100),
-          putAsk: Math.max(0, strike - basePrice + Math.random() * 200 - 50),
-          putLast: Math.max(0, strike - basePrice + Math.random() * 200 - 75),
-          putChange: (Math.random() - 0.5) * 20,
-          putVolume: Math.floor(Math.random() * 1000),
-          expiry: selectedExpiry
-        });
-      }
-      
-      setOptionsData(strikes);
-    };
-
-    generateMockOptions();
-    const interval = setInterval(generateMockOptions, 5000);
-    
-    return () => clearInterval(interval);
-  }, [selectedExpiry]);
-
-  const formatPrice = (price: number) => price.toFixed(1);
-  const formatChange = (change: number) => `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
+  // TODO: Implement options data subscription
+  // useEffect(() => {
+  //   const unsubscribe = wsService.subscribe('options_channel', symbol, (data) => {
+  //     console.log('Options data:', data);
+  //   });
+  //   return unsubscribe;
+  // }, [symbol, wsService]);
 
   return (
     <Card className="p-4 bg-gray-900 border-gray-800">
@@ -98,27 +60,24 @@ export const OptionsChain: React.FC<{ symbol: string }> = ({ symbol }) => {
             </tr>
           </thead>
           <tbody>
-            {optionsData.map((option, index) => (
-              <tr key={index} className="border-b border-gray-800 hover:bg-gray-800">
-                <td className="py-1 text-white font-semibold">{option.strike}</td>
-                <td className="text-right py-1 text-green-400">{formatPrice(option.callBid)}</td>
-                <td className="text-right py-1 text-green-400">{formatPrice(option.callAsk)}</td>
-                <td className="text-right py-1 text-green-400">{formatPrice(option.callLast)}</td>
-                <td className={`text-right py-1 ${option.callChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {formatChange(option.callChange)}
-                </td>
-                <td className="text-right py-1 text-gray-300">{option.callVolume}</td>
-                <td className="text-right py-1 text-red-400">{formatPrice(option.putBid)}</td>
-                <td className="text-right py-1 text-red-400">{formatPrice(option.putAsk)}</td>
-                <td className="text-right py-1 text-red-400">{formatPrice(option.putLast)}</td>
-                <td className={`text-right py-1 ${option.putChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {formatChange(option.putChange)}
-                </td>
-                <td className="text-right py-1 text-gray-300">{option.putVolume}</td>
-              </tr>
-            ))}
+            <tr>
+              <td colSpan={11} className="text-center py-12 text-gray-400">
+                <div className="text-lg mb-2">Options Data Placeholder</div>
+                <div className="text-sm text-gray-500">
+                  Check Delta Exchange documentation for options WebSocket channels
+                  <br />
+                  Subscribe to the appropriate channel and update this component
+                </div>
+              </td>
+            </tr>
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-4 p-3 bg-gray-800 rounded text-xs text-gray-400">
+        <strong>Options Integration:</strong> Check Delta Exchange docs for options channels
+        <br />
+        <strong>Symbol:</strong> {symbol} | <strong>Expiry:</strong> {selectedExpiry}
       </div>
     </Card>
   );
